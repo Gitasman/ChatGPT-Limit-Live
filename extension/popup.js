@@ -1,0 +1,45 @@
+'use strict';
+const C=globalThis.LimitLiveCore,UI=globalThis.LimitLiveUI,t=UI.t;
+let cfg=C.settings(),savedCfg=cfg,state=null,saving=0,revision=0,sizeTimer=null,writes=Promise.resolve();
+const htmlCache=new Map();
+function setHTML(id,markup){if(htmlCache.get(id)===markup)return false;htmlCache.set(id,markup);document.getElementById(id).innerHTML=markup;return true;}
+document.documentElement.lang=UI.ru?'ru':'en';
+const style=document.createElement('style');style.textContent=UI.styles;document.head.appendChild(style);
+const app=document.getElementById('app');
+app.innerHTML=`<header class="header"><div class="brand"><span class="brand-mark">${UI.svg('logo')}</span><span class="brand-name">Limit Live</span></div><button id="settings" class="icon-button" aria-label="${t.settings}" title="${t.settings}" aria-expanded="false">${UI.svg('gear')}</button></header><div class="scope"><span>Work / Codex</span><span id="plan" class="plan"></span></div><div id="meters"></div><div id="additional" class="additional"></div><footer class="footer"><span id="status" class="status" role="status"></span><span id="checked" class="version"></span></footer><div id="error" class="error" role="status"></div><section class="preferences"><div class="control-heading">${t.display}</div><div class="segments mode" role="group" aria-label="${t.display}"><button id="modePanel">${t.panel}</button><button id="modeCompact">${t.compact}</button><button id="modeIcon">${t.iconOnly}</button></div></section>${UI.sizeControl()}<div id="prefsHolder"></div><a id="open" class="open-link" href="https://chatgpt.com/" target="_blank" rel="noreferrer">${t.open}${UI.svg('arrow')}</a><p id="pin" class="note pin-note">${t.pin}</p>`;
+document.getElementById('prefsHolder').innerHTML=UI.controls({mode:false});
+const q=id=>document.getElementById(id);
+function render(){
+  document.documentElement.dataset.theme=cfg.theme;
+  const info=C.badge(state||{});
+  q('plan').textContent=state?.usage?.plan||'';
+  setHTML('meters',state?.usage?UI.meters(state.usage):`<p class="empty">${UI.esc(state?t[state.status]||t.loading:t.noTab)}</p>`);
+  const open=q('additional').querySelector('details')?.open;
+  const changed=setHTML('additional',state?.usage?.additional?.length?`<details><summary>${t.additional}</summary>${state.usage.additional.map(p=>`<h4>${UI.esc(p.name)}</h4>${UI.meters(p)}`).join('')}</details>`:'');if(changed&&open){const details=q('additional').querySelector('details');if(details)details.open=true;}
+  q('status').textContent=state?.usage?(info.stale?t.stale:t.auto):(state?t[state.status]||t.loading:t.empty);q('status').dataset.stale=info.stale?'yes':'no';
+  q('checked').textContent=state?.updatedAt?new Date(state.updatedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
+  q('checked').title=state?.updatedAt?`${t.source} · ${new Date(state.updatedAt).toLocaleString()}`:'';
+  UI.setControls(document,cfg);q('diameter').value=String(cfg.diameter);q('diameterValue').textContent=cfg.diameter+' px';
+}
+function persist(patch){
+  cfg=C.settings({...cfg,...patch});const desired=cfg,current=++revision;render();
+  const write=async()=>{
+    saving++;
+    try{await chrome.storage.local.set({limitLiveSettings:desired});savedCfg=desired;if(current===revision)q('error').textContent='';}
+    catch{if(current===revision){cfg=savedCfg;q('error').textContent=t.notSaved;}}
+    finally{saving--;render();}
+  };
+  writes=writes.then(write,write);return writes;
+}
+for(const mode of ['Panel','Compact','Icon'])q('mode'+mode).onclick=()=>persist({hidden:mode==='Icon',collapsed:mode==='Compact'});
+for(const key of ['theme','position','interval'])q(key).onchange=e=>persist({[key]:['scale','interval'].includes(key)?Number(e.target.value):e.target.value,...(key==='position'?{point:null}:{})});
+q('restore').onclick=()=>persist({theme:'system',scale:1,diameter:148,position:'right',point:null});q('dock').onclick=()=>persist({point:null});
+q('diameter').oninput=e=>{cfg=C.settings({...cfg,diameter:Number(e.target.value)});q('diameterValue').textContent=cfg.diameter+' px';clearTimeout(sizeTimer);sizeTimer=setTimeout(()=>{sizeTimer=null;persist({diameter:cfg.diameter})},120);};
+q('diameter').onchange=e=>{clearTimeout(sizeTimer);sizeTimer=null;return persist({diameter:Number(e.target.value)})};
+globalThis.addEventListener?.('pagehide',()=>{if(sizeTimer!==null){clearTimeout(sizeTimer);sizeTimer=null;persist({diameter:cfg.diameter})}});
+q('settings').onclick=()=>{q('prefs').hidden=!q('prefs').hidden;q('settings').setAttribute('aria-expanded',String(!q('prefs').hidden));};
+async function refresh(){
+  try{const [tab]=await chrome.tabs.query({active:true,currentWindow:true});const data=await chrome.runtime.sendMessage({type:'limit-live-overview',activeTabId:tab?.id});state=data?.state||null;render();}catch{state=null;render();}
+}
+chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.limitLiveSettings&&!saving){cfg=C.settings(changes.limitLiveSettings.newValue);savedCfg=cfg;render()}});
+(async()=>{try{cfg=C.settings((await chrome.storage.local.get('limitLiveSettings')).limitLiveSettings);savedCfg=cfg;}catch{}render();refresh();try{const pinned=await chrome.action.getUserSettings();q('pin').hidden=!!pinned.isOnToolbar}catch{}setInterval(refresh,3000)})();

@@ -1,0 +1,14 @@
+{
+  "name": "chatgpt-limit-live",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Automatic account-aware Work/Codex allowance display for ChatGPT",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check extension/core.js && node --check extension/content.js && node --check extension/bridge.js && node --check extension/popup.js && node --check extension/ui.js && node --check extension/layout.js && node --check extension/background.js"
+  }
+}

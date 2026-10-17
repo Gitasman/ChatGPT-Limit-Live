@@ -1,0 +1,18 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
+const snap=(remaining=73)=>({status:'current',updatedAt:Date.now(),usage:{plan:'business',windows:[{kind:'weekly',seconds:604800,remaining,resetAt:Date.now()+86400000}],additional:[]}});
+function worker(saved={}){
+ const session=structuredClone(saved),badges={},titles={},events={},calls=[];let message;
+ const event=name=>({addListener:fn=>events[name]=fn});
+ const ctx=vm.createContext({console,Date,URL,Promise,structuredClone,importScripts:()=>{},chrome:{runtime:{id:'ext',getURL:p=>'chrome-extension://ext/'+p,onMessage:{addListener:f=>message=f},onInstalled:event('installed'),onStartup:event('startup')},i18n:{getUILanguage:()=> 'ru'},storage:{session:{get:async key=>({[key]:session[key]}),set:async values=>Object.assign(session,structuredClone(values))}},action:{setBadgeText:async p=>{calls.push(p);badges[p.tabId??'global']=p.text},setBadgeBackgroundColor:async()=>{},setBadgeTextColor:async()=>{},setTitle:async p=>titles[p.tabId??'global']=p.title},alarms:{create:async()=>{},onAlarm:event('alarm')},tabs:{onActivated:event('activated'),onRemoved:event('removed'),onUpdated:event('updated')}}});
+ vm.runInContext(fs.readFileSync(__dirname+'/../extension/core.js','utf8'),ctx);vm.runInContext(fs.readFileSync(__dirname+'/../extension/background.js','utf8'),ctx);
+ const send=(msg,tabId=1)=>new Promise(resolve=>{const sender=tabId?{id:'ext',frameId:0,tab:{id:tabId,active:true,url:'https://chatgpt.com/c/example'},url:'https://chatgpt.com/c/example'}:{id:'ext',url:'chrome-extension://ext/popup.html'};const async=message(msg,sender,resolve);if(!async)resolve(null)});
+ return {session,badges,titles,events,send,calls};
+}
+test('snapshot updates both the tab and the global toolbar badge',async()=>{const r=worker();await r.send({type:'limit-live-snapshot',state:snap(),foreground:true});assert.equal(r.badges[1],'73%');assert.equal(r.badges.global,'73%')});
+test('hidden tab from another account does not replace selected badge',async()=>{const r=worker();await r.send({type:'limit-live-snapshot',state:snap(73),foreground:true},1);await r.send({type:'limit-live-snapshot',state:snap(12),foreground:false},2);assert.equal(r.badges.global,'73%');assert.equal(r.badges[2],'12%')});
+test('account invalidation clears the toolbar percentage immediately',async()=>{const r=worker();await r.send({type:'limit-live-snapshot',state:snap(),foreground:true});await r.send({type:'limit-live-snapshot',state:{status:'switching',usage:null},foreground:true});assert.equal(r.badges.global,'…')});
+test('popup can recover selected-tab state after worker restart',async()=>{const a=worker();await a.send({type:'limit-live-snapshot',state:snap(),foreground:true});const b=worker(a.session);const value=await b.send({type:'limit-live-overview',activeTabId:999},null);assert.equal(value.state.usage.windows[0].remaining,73);assert.equal(value.tabId,1)});
+test('alarm turns an old percentage into a stale indicator',async()=>{const r=worker();const s=snap();s.updatedAt-=180000;await r.send({type:'limit-live-snapshot',state:s,foreground:true});assert.equal(r.badges.global,'?')});
+test('untrusted message sources cannot set the badge',async()=>{const r=worker();const value=await r.send({type:'not-a-real-command'});assert.equal(value,null);assert.equal(r.badges.global,undefined)});
+
+test('repeated popup reads do not repaint an unchanged toolbar badge',async()=>{const r=worker();await r.send({type:'limit-live-snapshot',state:snap(),foreground:true});const count=r.calls.length;await r.send({type:'limit-live-overview'},null);await r.send({type:'limit-live-overview'},null);assert.equal(r.calls.length,count)});
