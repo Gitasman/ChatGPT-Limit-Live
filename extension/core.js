@@ -29,7 +29,7 @@ function normalize(raw,now=Date.now()) {
   return {plan:typeof raw.plan_type==='string'?raw.plan_type.slice(0,40):'',windows:main,additional,resets:resetCredits(raw.rate_limit_reset_credits)};
 }
 const COLOR_KEYS=['percent','ring','background','pill','pillText','tooltip','tooltipText','tooltipBorder','track','warning','critical'];
-const DARK_COLORS={percent:'#d4d4d4',ring:'#9b9b9b',background:'#181818',pill:'#202020',pillText:'#d4d4d4',tooltip:'#202020',tooltipText:'#dedede',tooltipBorder:'#383838',track:'#353535',warning:'#edbf6b',critical:'#ff91aa'};
+const DARK_COLORS={percent:'#f4f4f4',ring:'#ededed',background:'#181818',pill:'#202020',pillText:'#d4d4d4',tooltip:'#202020',tooltipText:'#ededed',tooltipBorder:'#383838',track:'#353535',warning:'#edbf6b',critical:'#ff91aa'};
 const LIGHT_COLORS={percent:'#24242b',ring:'#35353e',background:'#ffffff',pill:'#f4f4f6',pillText:'#24242b',tooltip:'#ffffff',tooltipText:'#24242b',tooltipBorder:'#dedee3',track:'#e9e9ed',warning:'#926414',critical:'#b32947'};
 function color(value){
   if(typeof value!=='string')return null;
@@ -43,19 +43,41 @@ function settings(input={}) {
   const s=input&&typeof input==='object'?input:{};
   const bounded=(key,min,max,fallback)=>valid(s[key])&&s[key]>=min&&s[key]<=max?s[key]:fallback;
   const point=s.point&&valid(s.point.x)&&valid(s.point.y)&&s.point.x>=0&&s.point.x<=1&&s.point.y>=0&&s.point.y<=1?{x:s.point.x,y:s.point.y}:null;
-  const legacy=s.appearanceVersion!==3;
+  const legacy=s.appearanceVersion!==3&&s.appearanceVersion!==4;
+  const oldAppearance=s.appearanceVersion!==4;
   const previousDefault=legacy&&(s.diameter===90||s.appearanceVersion!==2&&s.diameter===148);
   const sourceDiameter=previousDefault?50:valid(s.diameter)?s.diameter:[.9,1.1].includes(s.scale)?Math.round(148*s.scale/4)*4:50;
   const diameter=Math.round(Math.max(32,Math.min(150,sourceDiameter)));
-  const theme=['system','light','dark'].includes(s.theme)?(s.appearanceVersion!==2&&s.appearanceVersion!==3&&s.theme==='system'?'dark':s.theme):'dark';
+  const theme=['system','light','dark'].includes(s.theme)?(s.appearanceVersion!==2&&s.appearanceVersion!==3&&s.appearanceVersion!==4&&s.theme==='system'?'dark':s.theme):'dark';
   const source=s.colorOverrides&&typeof s.colorOverrides==='object'?s.colorOverrides:(s.colors&&typeof s.colors==='object'?s.colors:{});
   const colorOverrides={};for(const key of COLOR_KEYS){const value=color(source[key]);if(value)colorOverrides[key]=value;}
   const colors={...palette(theme),...colorOverrides};
-  return {appearanceVersion:3,diameter,theme,scale:[.9,1,1.1].includes(s.scale)?s.scale:1,position:['left','right'].includes(s.position)?s.position:'right',interval:Math.round(bounded('interval',30,300,30)),collapsed:s.collapsed===true,hidden:s.hidden===true,point,
-    colors,colorOverrides,ringWidth:Math.min(Math.floor(diameter/4)/2,bounded('ringWidth',1,12,3)),numberScale:bounded('numberScale',.22,.48,.34),decimals:[0,1,2].includes(s.decimals)?s.decimals:1,
-    backgroundOpacity:bounded('backgroundOpacity',0,100,100),fontWeight:[400,500,600,700].includes(s.fontWeight)?s.fontWeight:600,roundCaps:s.roundCaps!==false,track:s.track===true,shadow:s.shadow===true,adaptiveColors:s.adaptiveColors===true,tooltip:s.tooltip!==false,tooltipDelay:Math.round(bounded('tooltipDelay',0,1500,250))};
+  return {appearanceVersion:4,diameter,theme,language:['en','ru','system'].includes(s.language)?s.language:'en',scale:[.9,1,1.1].includes(s.scale)?s.scale:1,position:['left','right'].includes(s.position)?s.position:'right',interval:Math.round(bounded('interval',30,300,30)),collapsed:s.collapsed===true,hidden:s.hidden===true,point,
+    colors,colorOverrides,ringWidth:Math.min(Math.floor(diameter/4)/2,oldAppearance&&s.ringWidth===3?5:bounded('ringWidth',1,12,5)),numberScale:bounded('numberScale',.22,.48,.34),decimals:[0,1,2].includes(s.decimals)?s.decimals:1,
+    backgroundOpacity:bounded('backgroundOpacity',0,100,100),fontWeight:oldAppearance&&s.fontWeight===600?500:[400,500,600,700].includes(s.fontWeight)?s.fontWeight:500,roundCaps:s.roundCaps!==false,track:oldAppearance||s.track!==false,shadow:oldAppearance||s.shadow!==false,adaptiveColors:s.adaptiveColors===true,tooltip:s.tooltip!==false,tooltipDelay:Math.round(bounded('tooltipDelay',0,1500,250)),tooltipFontSize:Math.round(bounded('tooltipFontSize',12,20,14)),tooltipWidth:Math.round(bounded('tooltipWidth',240,420,300))};
 }
-function resetAppearance(input){const previous=settings(input);return settings({...previous,appearanceVersion:3,diameter:50,theme:'dark',scale:1,ringWidth:3,numberScale:.34,decimals:1,backgroundOpacity:100,fontWeight:600,roundCaps:true,track:false,shadow:false,adaptiveColors:false,tooltip:true,tooltipDelay:250,colorOverrides:{}});}
+function resetAppearance(input){const previous=settings(input);return settings({...previous,appearanceVersion:4,diameter:50,theme:'dark',scale:1,ringWidth:5,numberScale:.34,decimals:1,backgroundOpacity:100,fontWeight:500,roundCaps:true,track:true,shadow:true,adaptiveColors:false,tooltip:true,tooltipDelay:250,tooltipFontSize:14,tooltipWidth:300,colorOverrides:{}});}
+const SETTINGS_KEYS=['appearanceVersion','diameter','theme','language','scale','position','interval','collapsed','hidden','point','colorOverrides','ringWidth','numberScale','decimals','backgroundOpacity','fontWeight','roundCaps','track','shadow','adaptiveColors','tooltip','tooltipDelay','tooltipFontSize','tooltipWidth'];
+function exportSettings(input,extensionVersion=''){
+  const cfg=settings(input);
+  return {format:'chatgpt-limit-live-settings',version:1,extensionVersion:String(extensionVersion).slice(0,32),exportedAt:new Date().toISOString(),settings:Object.fromEntries(SETTINGS_KEYS.map(key=>[key,cfg[key]]))};
+}
+function importSettings(text){
+  const fail=()=>{throw Object.assign(new Error('Invalid settings backup'),{code:'settingsImport'});};
+  if(typeof text!=='string'||text.length>65536)fail();
+  let data;try{data=JSON.parse(text)}catch{fail()}
+  const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
+  if(!object(data)||data.format!=='chatgpt-limit-live-settings'||data.version!==1||!object(data.settings))fail();
+  const s=data.settings;
+  if(Object.keys(s).some(key=>!SETTINGS_KEYS.includes(key))||SETTINGS_KEYS.some(key=>!Object.prototype.hasOwnProperty.call(s,key)))fail();
+  if(s.appearanceVersion!==4||!['en','ru','system'].includes(s.language)||!['dark','light','system'].includes(s.theme)||!['left','right'].includes(s.position)||![.9,1,1.1].includes(s.scale)||![400,500,600,700].includes(s.fontWeight)||![0,1,2].includes(s.decimals))fail();
+  for(const [key,min,max,integer] of [['diameter',32,150,true],['interval',30,300,true],['ringWidth',1,12,false],['numberScale',.22,.48,false],['backgroundOpacity',0,100,false],['tooltipDelay',0,1500,true],['tooltipFontSize',12,20,true],['tooltipWidth',240,420,true]])if(!valid(s[key])||s[key]<min||s[key]>max||integer&&!Number.isInteger(s[key]))fail();
+  if(s.ringWidth>Math.min(12,Math.floor(s.diameter/4)/2))fail();
+  for(const key of ['collapsed','hidden','roundCaps','track','shadow','adaptiveColors','tooltip'])if(typeof s[key]!=='boolean')fail();
+  if(s.point!==null&&(!object(s.point)||Object.keys(s.point).some(key=>!['x','y'].includes(key))||!valid(s.point.x)||!valid(s.point.y)||s.point.x<0||s.point.x>1||s.point.y<0||s.point.y>1))fail();
+  if(!object(s.colorOverrides)||Object.keys(s.colorOverrides).some(key=>!COLOR_KEYS.includes(key)||!color(s.colorOverrides[key])))fail();
+  return settings(s);
+}
 function contrast(foreground,background){
   const luminance=hex=>{const c=color(hex);if(!c)return 0;const rgb=[1,3,5].map(i=>parseInt(c.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
   const a=luminance(foreground),b=luminance(background);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
@@ -137,5 +159,5 @@ class Monitor {
     } finally {if(this.controller===controller)this.controller=null;}
   }
 }
-const api={normalize,settings,identity,Monitor,place,anchor,snapshot,badge,color,contrast,resetAppearance,tooltipPlace,COLOR_KEYS,palette,resetCredits,resetWire};root.LimitLiveCore=api;if(typeof module!=='undefined')module.exports=api;
+const api={normalize,settings,identity,Monitor,place,anchor,snapshot,badge,color,contrast,resetAppearance,tooltipPlace,COLOR_KEYS,palette,resetCredits,resetWire,exportSettings,importSettings};root.LimitLiveCore=api;if(typeof module!=='undefined')module.exports=api;
 })(globalThis);

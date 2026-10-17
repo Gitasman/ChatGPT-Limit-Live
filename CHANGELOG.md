@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0 — 2026-10-17
+
+- Brighten percentage/progress defaults; use a 5 px arc, medium 500 weight, visible track and soft shadow. Migrate former standard values without losing manual colors or positions.
+- Remove hide controls from both page circle and pill; keep visibility in the toolbar popup.
+- Replace the compact dropdown with a 400 px Overview/Settings layout, larger controls, grouped paired fields, keyboard tabs and preserved section/scroll state on localization.
+- Default to English; persist English/Russian/browser-language selection and apply it live to popup, percentage formatting and hover details.
+- Redesign hover details with clearer hierarchy, larger text, explicit reset countdown/date and adjustable 12–20 px typography / 240–420 px width.
+- Add versioned JSON export/import for all preferences, bounded strict validation, pending-edit flush, storage-error rollback and Undo import until the next manual edit. Backups exclude account/usage/session data.
+- Dispose old color-editor key listeners during language changes and retain coalesced writes and in-place usage rendering.
+- Validation: 129 automated cases plus syntax checks. Actual Chrome visual/interaction and native file download/import dialogs remain unverified here.
+
 ## 1.4.0 — 2026-10-17
 
 - Default to 50 px with a 32–150 px range; migrate the previous default and clamp older custom sizes without resetting colors or placement.

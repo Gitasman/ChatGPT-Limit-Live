@@ -27,8 +27,9 @@ class ColorEditor {
     this.q('colorDone').onclick=()=>this.close();
     this.q('colorEyeDropper').hidden=typeof globalThis.EyeDropper!=='function';
     this.q('colorEyeDropper').onclick=()=>this.pick();
-    root.addEventListener?.('keydown',e=>{if(e.key==='Escape'&&this.key){e.preventDefault();e.stopPropagation();this.close();}});
+    this.keydown=e=>{if(e.key==='Escape'&&this.key){e.preventDefault();e.stopPropagation();this.close();}};root.addEventListener?.('keydown',this.keydown);
   }
+  destroy(){this.key=null;this.picker?.abort();this.root.removeEventListener?.('keydown',this.keydown);}
   commit(key,raw,delay=0){
     const value=C.color(raw),input=this.q('hex_'+key);input.setAttribute('aria-invalid',String(!value));
     if(!value){this.error(t.invalidColor);return Promise.resolve(false);}
@@ -42,9 +43,9 @@ class ColorEditor {
     this.q('colorItem_'+key).after(this.q('colorEditor'));this.q('colorEditor').hidden=false;this.update();
     this.q('colorEditor').scrollIntoView?.({block:'nearest',behavior:'instant'});
   }
-  close(){
+  close(restoreFocus=true){
     const key=this.key;this.picker?.abort();this.key=null;this.q('colorEditor').hidden=true;
-    if(key){this.q('color_'+key).setAttribute('aria-expanded','false');this.q('color_'+key).focus();}
+    if(key){this.q('color_'+key).setAttribute('aria-expanded','false');if(restoreFocus)this.q('color_'+key).focus();}
     return this.flush();
   }
   update(){

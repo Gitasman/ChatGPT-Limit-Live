@@ -18,7 +18,7 @@ function publish(force=false){
 const alive=()=>{try{return !!chrome.runtime.id}catch{return false}};
 function stop(){stopped=true;clearTimeout(pollTimer);clearTimeout(eventTimer);clearInterval(tickTimer);clearTimeout(generationTimer);observer?.disconnect();layout?.destroy();hoverDetails?.destroy();monitor.invalidate();if(refs.orb)refs.orb.title=t.update;}
 async function get(key){try{return(await chrome.storage.local.get(key))[key]}catch{return undefined}}
-async function save(){try{await chrome.storage.local.set({limitLiveSettings:cfg});storageError='';}catch{storageError=t.notSaved;if(cfg.hidden)cfg.hidden=false;}render();publish();}
+async function save(){try{await chrome.storage.local.set({limitLiveSettings:cfg});storageError='';}catch{storageError=true;if(cfg.hidden)cfg.hidden=false;}render();publish();}
 async function json(path,headers={},signal,timeoutMs=12000){
   if(!['/api/auth/session','/backend-api/wham/usage','/backend-api/wham/rate-limit-reset-credits'].includes(path))throw new Error('Blocked endpoint');
   const timeout=AbortSignal.timeout(timeoutMs);
@@ -80,6 +80,7 @@ function setText(node,value){if(node.textContent!==value)node.textContent=value;
 function setAttr(node,key,value){if(node.getAttribute?.(key)!==String(value))node.setAttribute(key,String(value));}
 function render(){
   if(!root)return;
+  UI.setLanguage(cfg.language);host.lang=UI.language;
   host.dataset.theme=cfg.theme;host.dataset.collapsed=cfg.collapsed?'yes':'no';host.dataset.hidden=cfg.hidden?'yes':'no';
   css('--diameter',cfg.diameter+'px');
   if(cfg.hidden){hoverDetails?.hide();return;}
@@ -87,13 +88,15 @@ function render(){
   css('--orb-text',colors.percent);css('--orb-bg',colors.background+Math.round(cfg.backgroundOpacity*2.55).toString(16).padStart(2,'0'));
   css('--orb-ring',cfg.adaptiveColors&&primary?.remaining<=10?colors.critical:cfg.adaptiveColors&&primary?.remaining<=30?colors.warning:colors.ring);
   css('--orb-track',colors.track);css('--pill-bg',colors.pill);css('--pill-text',colors.pillText);css('--tip-bg',colors.tooltip);css('--tip-text',colors.tooltipText);css('--tip-border',colors.tooltipBorder);
+  css('--tip-font',cfg.tooltipFontSize+'px');css('--tip-width',cfg.tooltipWidth+'px');
+  setAttr(refs.pillShell,'aria-label',t.drag);setAttr(refs.pill,'aria-label',t.expand);
   css('--number-scale',cfg.numberScale);css('--number-weight',cfg.fontWeight);css('--ring-px',cfg.ringWidth+'px');css('--text-factor',Math.max(1.5,model.percent.length*.58));
   setText(refs.orbPercent,model.percent);setAttr(refs.ringSvg,'viewBox',`0 0 ${cfg.diameter} ${cfg.diameter}`);
   for(const circle of [refs.ringProgress,refs.ringTrack]){setAttr(circle,'cx',cfg.diameter/2);setAttr(circle,'cy',cfg.diameter/2);setAttr(circle,'r',(cfg.diameter-cfg.ringWidth)/2);setAttr(circle,'stroke-width',cfg.ringWidth);}
   setAttr(refs.ringProgress,'transform',`rotate(-90 ${cfg.diameter/2} ${cfg.diameter/2})`);setAttr(refs.ringProgress,'stroke-linecap',cfg.roundCaps?'round':'butt');
   setAttr(refs.ringProgress,'stroke-dashoffset',model.offset);setAttr(refs.ringProgress,'visibility',model.progress>0?'visible':'hidden');setAttr(refs.ringTrack,'visibility',cfg.track?'visible':'hidden');
   refs.orb.dataset.stale=model.stale?'yes':'no';refs.orb.dataset.shadow=cfg.shadow?'yes':'no';
-  setAttr(refs.orb,'aria-label',`${model.title.replace(/\n/g,'. ')}${storageError?'. '+storageError:''}`);
+  setAttr(refs.orb,'aria-label',`${model.title.replace(/\n/g,'. ')}${storageError?'. '+t.notSaved:''}`);
   const status=state.usage&&model.stale?t.stale:UI.t[state.status]||t.loading;
   setText(refs.pill,primary?`${model.label} · ${model.percent}${model.stale?' · ?':''}`:status);
   layout?.update();hoverDetails?.update();
@@ -103,13 +106,12 @@ function mount(){
   if(stopped||host?.isConnected)return;
   if(!host){
     host=document.createElement('div');host.id='chatgpt-limit-live';host.style.cssText='position:fixed;z-index:2147483000;display:block';root=host.attachShadow({mode:'closed'});
-    root.innerHTML=`<style>${UI.styles}</style><div class="pill-shell" id="pillShell" tabindex="0" role="group" aria-label="${UI.t.drag}"><div class="pill" id="pill" role="button" tabindex="0" aria-label="${UI.t.expand}"></div><button class="icon-button" id="pillHide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></div><article class="orb" id="orb" tabindex="0" role="group" aria-describedby="orbTooltip"><svg class="orb-ring" id="ringSvg" viewBox="0 0 50 50" aria-hidden="true"><circle class="ring-track" id="ringTrack"/><circle class="ring-progress" id="ringProgress" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="orb-center"><strong class="orb-number" id="orbPercent">…</strong></div><button class="orb-hide" id="hide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></article><div class="orb-tooltip" id="orbTooltip" role="tooltip" hidden></div>`;
-    for(const id of ['orb','orbPercent','ringSvg','ringProgress','ringTrack','pill','orbTooltip'])refs[id]=root.getElementById(id);
+    root.innerHTML=`<style>${UI.styles}</style><div class="pill-shell" id="pillShell" tabindex="0" role="group" aria-label="${UI.t.drag}"><div class="pill" id="pill" role="button" tabindex="0" aria-label="${UI.t.expand}"></div></div><article class="orb" id="orb" tabindex="0" role="group" aria-describedby="orbTooltip"><svg class="orb-ring" id="ringSvg" viewBox="0 0 50 50" aria-hidden="true"><circle class="ring-track" id="ringTrack"/><circle class="ring-progress" id="ringProgress" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="orb-center"><strong class="orb-number" id="orbPercent">…</strong></div></article><div class="orb-tooltip" id="orbTooltip" role="tooltip" hidden></div>`;
+    for(const id of ['orb','orbPercent','ringSvg','ringProgress','ringTrack','pill','pillShell','orbTooltip'])refs[id]=root.getElementById(id);
     refs.pill.onclick=()=>setMode('panel');
     refs.pill.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setMode('panel')}});
-    for(const id of ['hide','pillHide'])root.getElementById(id).onclick=()=>setMode('icon');
     layout=new globalThis.LimitLiveLayout(host,[refs.orb,root.getElementById('pillShell')],()=>cfg,(patch,persist)=>{cfg=C.settings({...cfg,...patch});if(persist)save()});
-    hoverDetails=new globalThis.LimitLiveTooltip(host,[refs.orb,root.getElementById('pillShell')],refs.orbTooltip,()=>({...publicState(),error:storageError}),()=>cfg);
+    hoverDetails=new globalThis.LimitLiveTooltip(host,[refs.orb,root.getElementById('pillShell')],refs.orbTooltip,()=>({...publicState(),error:storageError?t.notSaved:''}),()=>cfg);
   }
   document.documentElement.appendChild(host);render();
 }
@@ -130,7 +132,7 @@ chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.limitLiveSettings){cfg=C.settings(changes.limitLiveSettings.newValue);render();publish();schedule()}});
 globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>render());
 (async()=>{
-  cfg=C.settings(await get('limitLiveSettings'));mount();
+  cfg=C.settings(await get('limitLiveSettings'));UI.setLanguage(cfg.language);mount();
   observer=new MutationObserver(()=>{
     if(!host?.isConnected)mount();
     if(generationTimer)return;
