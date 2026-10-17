@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0 — 2026-10-17
+
+- Show available-reset titles and expiration dates without a disclosure; include year/time zone and direct Usage links on reset cards and a compact Limits & resets button.
+- Add a capsule-shaped remaining-allowance outline to Pill mode, with shared progress/track colors, stale/zero/full states and resize-aware geometry.
+- Default number weight to Bold 700; migrate former standard weights while preserving explicit current choices. Keep v1.5 JSON imports compatible and restore their exact font weight.
+- Move Track color directly below Show track, including inline editor autosave feedback, and slightly tighten popup spacing without reducing readable type.
+- Reuse bounded Intl percentage formatters and sanitized snapshots; compare publication state/focus/badge instead of repeating payload serialization. Retain time-based freshness checks.
+- Skip unchanged SVG writes; update Pill geometry only for size/stroke changes and disconnect its resize observer on shutdown.
+- Validation: 143 automated cases plus syntax checks. Chrome visual/interaction and live-account reset integration remain unverified here.
+
 ## 1.5.0 — 2026-10-17
 
 - Brighten percentage/progress defaults; use a 5 px arc, medium 500 weight, visible track and soft shadow. Migrate former standard values without losing manual colors or positions.

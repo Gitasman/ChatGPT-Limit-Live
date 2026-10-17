@@ -40,16 +40,17 @@ class ColorEditor {
     this.picker?.abort();
     if(this.key)this.q('color_'+this.key).setAttribute('aria-expanded','false');
     this.key=key;this.q('color_'+key).setAttribute('aria-expanded','true');
-    this.q('colorItem_'+key).after(this.q('colorEditor'));this.q('colorEditor').hidden=false;this.update();
+    this.q('colorItem_'+key).after(this.q('colorEditor'));this.q('colorEditor').hidden=false;this.q('colorSaveStatus').hidden=true;this.update();
     this.q('colorEditor').scrollIntoView?.({block:'nearest',behavior:'instant'});
   }
   close(restoreFocus=true){
-    const key=this.key;this.picker?.abort();this.key=null;this.q('colorEditor').hidden=true;
+    const key=this.key;this.picker?.abort();this.key=null;this.q('colorEditor').hidden=true;this.q('colorSaveStatus').hidden=false;
     if(key){this.q('color_'+key).setAttribute('aria-expanded','false');if(restoreFocus)this.q('color_'+key).focus();}
     return this.flush();
   }
   update(){
     if(!this.key)return;
+    this.q('colorEditorStatus').textContent=this.q('colorSaveStatus').textContent;this.q('colorEditorStatus').dataset.state=this.q('colorSaveStatus').dataset.state;
     const value=UI.effectiveColors(this.getSettings())[this.key];
     this.q('colorEditorTitle').textContent=t[this.key+'Color'];this.q('colorValue').textContent=value.toUpperCase();
     this.q('colorPreview').style.setProperty('background',value);
