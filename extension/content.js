@@ -19,9 +19,9 @@ const alive=()=>{try{return !!chrome.runtime.id}catch{return false}};
 function stop(){stopped=true;clearTimeout(pollTimer);clearTimeout(eventTimer);clearInterval(tickTimer);clearTimeout(generationTimer);observer?.disconnect();layout?.destroy();hoverDetails?.destroy();monitor.invalidate();if(refs.orb)refs.orb.title=t.update;}
 async function get(key){try{return(await chrome.storage.local.get(key))[key]}catch{return undefined}}
 async function save(){try{await chrome.storage.local.set({limitLiveSettings:cfg});storageError='';}catch{storageError=t.notSaved;if(cfg.hidden)cfg.hidden=false;}render();publish();}
-async function json(path,headers={},signal){
-  if(!['/api/auth/session','/backend-api/wham/usage'].includes(path))throw new Error('Blocked endpoint');
-  const timeout=AbortSignal.timeout(12000);
+async function json(path,headers={},signal,timeoutMs=12000){
+  if(!['/api/auth/session','/backend-api/wham/usage','/backend-api/wham/rate-limit-reset-credits'].includes(path))throw new Error('Blocked endpoint');
+  const timeout=AbortSignal.timeout(timeoutMs);
   const joined=new AbortController();const abort=()=>joined.abort();signal?.addEventListener('abort',abort,{once:true});timeout.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
   try {
     const response=await fetch('https://chatgpt.com'+path,{method:'GET',credentials:'include',cache:'no-store',redirect:'error',headers:{accept:'application/json',...headers},signal:joined.signal});
@@ -33,7 +33,7 @@ async function json(path,headers={},signal){
 // Persist only an allowlisted usage schema. Never persist session, token, email or raw response.
 function wire(n){
   const pool=rows=>Object.fromEntries(rows.map((w,i)=>[i?'secondary_window':'primary_window',{limit_window_seconds:w.seconds,used_percent:w.used,reset_at:w.resetAt===null?null:w.resetAt/1000}]));
-  return {plan_type:n.plan,rate_limit:pool(n.windows),additional_rate_limits:n.additional.map(p=>({limit_name:p.name,rate_limit:pool(p.windows)}))};
+  return {plan_type:n.plan,rate_limit:pool(n.windows),additional_rate_limits:n.additional.map(p=>({limit_name:p.name,rate_limit:pool(p.windows)})),rate_limit_reset_credits:C.resetWire(n.resets)};
 }
 async function usage(auth,signal){
   const bytes=new TextEncoder().encode(auth.key);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -41,10 +41,22 @@ async function usage(auth,signal){
     if(signal.aborted)throw new DOMException('Aborted','AbortError');
     const entries=await get('limitLiveCache')||{};const cached=entries[hash];
     if(cached&&cached.at<=Date.now()&&Date.now()-cached.at<20000){try{return {normalized:C.normalize(cached.raw),updatedAt:cached.at}}catch{}}
-    const raw=await json('/backend-api/wham/usage',{'authorization':'Bearer '+auth.token,'chatgpt-account-id':auth.account},signal);
-    const normalized=C.normalize(raw);const at=Date.now();
+    const headers={'authorization':'Bearer '+auth.token,'chatgpt-account-id':auth.account};
+    const raw=await json('/backend-api/wham/usage',headers,signal);
+    const normalized=C.normalize(raw);const at=Date.now();let resetsCheckedAt=0;
+    if(normalized.resets?.available>0){
+      let previous=null;try{previous=C.normalize(cached?.raw).resets}catch{}
+      if(cached?.resetsCheckedAt<=at&&at-cached.resetsCheckedAt<300000&&previous?.available===normalized.resets.available){
+        resetsCheckedAt=cached.resetsCheckedAt;
+        if(previous.detailsKnown)normalized.resets=previous;
+      }else{
+        resetsCheckedAt=at;
+        try{const details=C.resetCredits(await json('/backend-api/wham/rate-limit-reset-credits',headers,signal,3000));if(details)normalized.resets=details;}
+        catch{/* Counts and ordinary usage remain available if the optional details endpoint fails. */}
+      }
+    }
     if(signal.aborted)throw new DOMException('Aborted','AbortError');
-    const next=Object.fromEntries(Object.entries(entries).filter(([,v])=>typeof v?.at==='number'&&at-v.at<3600000).sort((a,b)=>b[1].at-a[1].at).slice(0,7));next[hash]={raw:wire(normalized),at};
+    const next=Object.fromEntries(Object.entries(entries).filter(([,v])=>typeof v?.at==='number'&&at-v.at<3600000).sort((a,b)=>b[1].at-a[1].at).slice(0,7));next[hash]={raw:wire(normalized),at,resetsCheckedAt};
     try{await chrome.storage.local.set({limitLiveCache:next})}catch{/* Monitoring works without a cache. */}
     return {normalized,updatedAt:at};
   };
@@ -91,7 +103,7 @@ function mount(){
   if(stopped||host?.isConnected)return;
   if(!host){
     host=document.createElement('div');host.id='chatgpt-limit-live';host.style.cssText='position:fixed;z-index:2147483000;display:block';root=host.attachShadow({mode:'closed'});
-    root.innerHTML=`<style>${UI.styles}</style><div class="pill-shell" id="pillShell" tabindex="0" role="group" aria-label="${UI.t.drag}"><div class="pill" id="pill" role="button" tabindex="0" aria-label="${UI.t.expand}"></div><button class="icon-button" id="pillHide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></div><article class="orb" id="orb" tabindex="0" role="group" aria-describedby="orbTooltip"><svg class="orb-ring" id="ringSvg" viewBox="0 0 90 90" aria-hidden="true"><circle class="ring-track" id="ringTrack"/><circle class="ring-progress" id="ringProgress" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="orb-center"><strong class="orb-number" id="orbPercent">…</strong></div><button class="orb-hide" id="hide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></article><div class="orb-tooltip" id="orbTooltip" role="tooltip" hidden></div>`;
+    root.innerHTML=`<style>${UI.styles}</style><div class="pill-shell" id="pillShell" tabindex="0" role="group" aria-label="${UI.t.drag}"><div class="pill" id="pill" role="button" tabindex="0" aria-label="${UI.t.expand}"></div><button class="icon-button" id="pillHide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></div><article class="orb" id="orb" tabindex="0" role="group" aria-describedby="orbTooltip"><svg class="orb-ring" id="ringSvg" viewBox="0 0 50 50" aria-hidden="true"><circle class="ring-track" id="ringTrack"/><circle class="ring-progress" id="ringProgress" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="orb-center"><strong class="orb-number" id="orbPercent">…</strong></div><button class="orb-hide" id="hide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></article><div class="orb-tooltip" id="orbTooltip" role="tooltip" hidden></div>`;
     for(const id of ['orb','orbPercent','ringSvg','ringProgress','ringTrack','pill','orbTooltip'])refs[id]=root.getElementById(id);
     refs.pill.onclick=()=>setMode('panel');
     refs.pill.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setMode('panel')}});

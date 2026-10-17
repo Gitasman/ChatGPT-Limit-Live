@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0 — 2026-10-17
+
+- Default to 50 px with a 32–150 px range; migrate the previous default and clamp older custom sizes without resetting colors or placement.
+- Darken the widget and popup with neutral ChatGPT-style grays and fit arc thickness to small circles.
+- Replace the OS color picker with an inline editor: swatches, RGB, HEX, optional eyedropper, Done/Escape, per-color reset and visible autosave state.
+- Autosave complete HEX input without blur; coalesce slider writes and flush the final edit on closing. Preserve rollback and visible errors on failed storage.
+- Display server-provided banked reset counts and optional expiration details; distinguish unavailable data from zero.
+- Cache optional reset details per account for five minutes, limit their request to three seconds, and preserve usage/counts when that request fails. Read-only: activation opens the official Usage page for review and confirmation.
+- Validation: 113 automated cases plus syntax checks; actual Chrome UI/eyedropper and live-account reset integration remain unverified here.
+
 ## 1.3.0 — 2026-10-17
 
 - Default to a 90 px dark percentage-only circle; move arc to the outer edge with no default track or shadow.

@@ -11,7 +11,7 @@ package = json.loads((root / 'package.json').read_text())
 assert manifest['manifest_version'] == 3
 assert manifest['version'] == package['version']
 assert manifest['permissions'] == ['storage', 'alarms']
-refs = [manifest['action']['default_popup'], manifest['background']['service_worker'], 'core.js', 'ui.js', 'popup.js', *manifest['icons'].values()]
+refs = [manifest['action']['default_popup'], manifest['background']['service_worker'], 'core.js', 'ui.js', 'color-editor.js', 'popup.js', *manifest['icons'].values()]
 for script in manifest['content_scripts']:
     assert script['matches'] == ['https://chatgpt.com/*']
     refs.extend(script.get('js', []))
