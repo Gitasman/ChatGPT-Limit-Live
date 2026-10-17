@@ -4,7 +4,9 @@ const C=globalThis.LimitLiveCore;
 const UI=globalThis.LimitLiveUI;
 const t=UI.t;
 let cfg=C.settings(),stopped=false,pollTimer,eventTimer,tickTimer,generationTimer,observer,wasGenerating=false,storageError='',lastAttempt=0;
-let root,host,layout,refs={};
+let root,host,layout,hoverDetails,refs={};
+const styleCache={};
+function css(key,value){if(styleCache[key]===value)return;styleCache[key]=value;host.style.setProperty(key,value);}
 let lastPublished='';
 function publicState(){return C.snapshot({...monitor.state,interval:cfg.interval});}
 function publish(force=false){
@@ -14,7 +16,7 @@ function publish(force=false){
   try{const pending=chrome.runtime.sendMessage({type:'limit-live-snapshot',state,foreground:!document.hidden&&(document.hasFocus?.()??true)});pending?.catch(()=>{if(lastPublished===signature)lastPublished='';});}catch{}
 }
 const alive=()=>{try{return !!chrome.runtime.id}catch{return false}};
-function stop(){stopped=true;clearTimeout(pollTimer);clearTimeout(eventTimer);clearInterval(tickTimer);clearTimeout(generationTimer);observer?.disconnect();layout?.destroy();monitor.invalidate();if(refs.orb)refs.orb.title=t.update;}
+function stop(){stopped=true;clearTimeout(pollTimer);clearTimeout(eventTimer);clearInterval(tickTimer);clearTimeout(generationTimer);observer?.disconnect();layout?.destroy();hoverDetails?.destroy();monitor.invalidate();if(refs.orb)refs.orb.title=t.update;}
 async function get(key){try{return(await chrome.storage.local.get(key))[key]}catch{return undefined}}
 async function save(){try{await chrome.storage.local.set({limitLiveSettings:cfg});storageError='';}catch{storageError=t.notSaved;if(cfg.hidden)cfg.hidden=false;}render();publish();}
 async function json(path,headers={},signal){
@@ -61,38 +63,41 @@ async function refresh(){
   if(!navigator.onLine){monitor.emit({status:'offline'});schedule();return;}
   lastAttempt=Date.now();await monitor.refresh();schedule();
 }
-function schedule(){clearTimeout(pollTimer);if(!stopped)pollTimer=setTimeout(refresh,Math.max((document.hidden?120:cfg.interval)*1000,monitor.state.retryAt-Date.now()));}
+function schedule(){clearTimeout(pollTimer);if(!stopped)pollTimer=setTimeout(refresh,Math.max((document.hidden?Math.max(120,cfg.interval):cfg.interval)*1000,monitor.state.retryAt-Date.now()));}
 function setText(node,value){if(node.textContent!==value)node.textContent=value;}
 function setAttr(node,key,value){if(node.getAttribute?.(key)!==String(value))node.setAttribute(key,String(value));}
 function render(){
   if(!root)return;
   host.dataset.theme=cfg.theme;host.dataset.collapsed=cfg.collapsed?'yes':'no';host.dataset.hidden=cfg.hidden?'yes':'no';
-  if(host.style.getPropertyValue?.('--diameter')!==cfg.diameter+'px')host.style.setProperty('--diameter',cfg.diameter+'px');
-  if(cfg.hidden)return;
-  const state=publicState(),model=UI.orbModel(state),primary=state.usage?.windows.find(w=>w.kind==='weekly')||state.usage?.windows[0];
-  setText(refs.orbPercent,model.percent);setText(refs.orbLabel,model.label);
-  setText(refs.orbRemaining,model.stale&&primary?UI.t.stale:UI.t.remaining);
-  setText(refs.orbReset,model.reset);
-  setAttr(refs.ringProgress,'stroke-dashoffset',model.offset);
-  setAttr(refs.ringProgress,'visibility',model.progress>0?'visible':'hidden');
-  refs.orb.dataset.stale=model.stale?'yes':'no';refs.orb.dataset.tone=primary?.remaining<=10?'danger':primary?.remaining<=30?'warning':'normal';
-  refs.orb.title=storageError||model.title;setAttr(refs.orb,'aria-label',model.title.replace(/\n/g,'. '));
+  css('--diameter',cfg.diameter+'px');
+  if(cfg.hidden){hoverDetails?.hide();return;}
+  const state=publicState(),model=UI.orbModel(state,cfg),primary=state.usage?.windows.find(w=>w.kind==='weekly')||state.usage?.windows[0],colors=UI.effectiveColors(cfg);
+  css('--orb-text',colors.percent);css('--orb-bg',colors.background+Math.round(cfg.backgroundOpacity*2.55).toString(16).padStart(2,'0'));
+  css('--orb-ring',cfg.adaptiveColors&&primary?.remaining<=10?colors.critical:cfg.adaptiveColors&&primary?.remaining<=30?colors.warning:colors.ring);
+  css('--orb-track',colors.track);css('--pill-bg',colors.pill);css('--pill-text',colors.pillText);css('--tip-bg',colors.tooltip);css('--tip-text',colors.tooltipText);css('--tip-border',colors.tooltipBorder);
+  css('--number-scale',cfg.numberScale);css('--number-weight',cfg.fontWeight);css('--ring-px',cfg.ringWidth+'px');css('--text-factor',Math.max(1.5,model.percent.length*.58));
+  setText(refs.orbPercent,model.percent);setAttr(refs.ringSvg,'viewBox',`0 0 ${cfg.diameter} ${cfg.diameter}`);
+  for(const circle of [refs.ringProgress,refs.ringTrack]){setAttr(circle,'cx',cfg.diameter/2);setAttr(circle,'cy',cfg.diameter/2);setAttr(circle,'r',(cfg.diameter-cfg.ringWidth)/2);setAttr(circle,'stroke-width',cfg.ringWidth);}
+  setAttr(refs.ringProgress,'transform',`rotate(-90 ${cfg.diameter/2} ${cfg.diameter/2})`);setAttr(refs.ringProgress,'stroke-linecap',cfg.roundCaps?'round':'butt');
+  setAttr(refs.ringProgress,'stroke-dashoffset',model.offset);setAttr(refs.ringProgress,'visibility',model.progress>0?'visible':'hidden');setAttr(refs.ringTrack,'visibility',cfg.track?'visible':'hidden');
+  refs.orb.dataset.stale=model.stale?'yes':'no';refs.orb.dataset.shadow=cfg.shadow?'yes':'no';
+  setAttr(refs.orb,'aria-label',`${model.title.replace(/\n/g,'. ')}${storageError?'. '+storageError:''}`);
   const status=state.usage&&model.stale?t.stale:UI.t[state.status]||t.loading;
   setText(refs.pill,primary?`${model.label} · ${model.percent}${model.stale?' · ?':''}`:status);
-  refs.pill.title=model.title;
-  layout?.update();
+  layout?.update();hoverDetails?.update();
 }
 function setMode(mode){cfg=C.settings({...cfg,hidden:mode==='icon',collapsed:mode==='compact'});render();save();}
 function mount(){
   if(stopped||host?.isConnected)return;
   if(!host){
     host=document.createElement('div');host.id='chatgpt-limit-live';host.style.cssText='position:fixed;z-index:2147483000;display:block';root=host.attachShadow({mode:'closed'});
-    root.innerHTML=`<style>${UI.styles}</style><div class="pill-shell" id="pillShell" tabindex="0" role="group" aria-label="${UI.t.drag}"><div class="pill" id="pill" role="button" tabindex="0" aria-label="${UI.t.expand}"></div><button class="icon-button" id="pillHide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></div><article class="orb" id="orb" tabindex="0" role="group" aria-label="${UI.t.drag}"><svg class="orb-ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"/><circle class="ring-progress" id="ringProgress" cx="60" cy="60" r="52" transform="rotate(-90 60 60)" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="orb-center"><span class="orb-label" id="orbLabel"></span><strong class="orb-number" id="orbPercent">…</strong><span class="orb-remaining" id="orbRemaining">${UI.t.remaining}</span><span class="orb-reset" id="orbReset"></span></div><span class="orb-status" aria-hidden="true"></span><button class="orb-hide" id="hide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></article>`;
-    for(const id of ['orb','orbPercent','orbLabel','orbRemaining','orbReset','ringProgress','pill'])refs[id]=root.getElementById(id);
+    root.innerHTML=`<style>${UI.styles}</style><div class="pill-shell" id="pillShell" tabindex="0" role="group" aria-label="${UI.t.drag}"><div class="pill" id="pill" role="button" tabindex="0" aria-label="${UI.t.expand}"></div><button class="icon-button" id="pillHide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></div><article class="orb" id="orb" tabindex="0" role="group" aria-describedby="orbTooltip"><svg class="orb-ring" id="ringSvg" viewBox="0 0 90 90" aria-hidden="true"><circle class="ring-track" id="ringTrack"/><circle class="ring-progress" id="ringProgress" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><div class="orb-center"><strong class="orb-number" id="orbPercent">…</strong></div><button class="orb-hide" id="hide" aria-label="${UI.t.hide}" title="${UI.t.hide}">${UI.svg('close')}</button></article><div class="orb-tooltip" id="orbTooltip" role="tooltip" hidden></div>`;
+    for(const id of ['orb','orbPercent','ringSvg','ringProgress','ringTrack','pill','orbTooltip'])refs[id]=root.getElementById(id);
     refs.pill.onclick=()=>setMode('panel');
     refs.pill.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setMode('panel')}});
     for(const id of ['hide','pillHide'])root.getElementById(id).onclick=()=>setMode('icon');
     layout=new globalThis.LimitLiveLayout(host,[refs.orb,root.getElementById('pillShell')],()=>cfg,(patch,persist)=>{cfg=C.settings({...cfg,...patch});if(persist)save()});
+    hoverDetails=new globalThis.LimitLiveTooltip(host,[refs.orb,root.getElementById('pillShell')],refs.orbTooltip,()=>({...publicState(),error:storageError}),()=>cfg);
   }
   document.documentElement.appendChild(host);render();
 }
@@ -111,6 +116,7 @@ chrome.runtime.onMessage.addListener((message,_sender,respond)=>{
   if(message?.type==='limit-live-settings'){setMode('panel');respond({ok:true})}
 });
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&changes.limitLiveSettings){cfg=C.settings(changes.limitLiveSettings.newValue);render();publish();schedule()}});
+globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener?.('change',()=>render());
 (async()=>{
   cfg=C.settings(await get('limitLiveSettings'));mount();
   observer=new MutationObserver(()=>{

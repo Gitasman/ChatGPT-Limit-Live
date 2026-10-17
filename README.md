@@ -2,15 +2,17 @@
 
 A small Chrome extension that shows your remaining **Work / Codex** allowance on ChatGPT — automatically, with account-aware server data.
 
-**[Download v1.2.0 ZIP](https://github.com/Gitasman/ChatGPT-Limit-Live/raw/refs/heads/main/downloads/ChatGPT-Limit-Live-v1.2.0.zip)** · [Русская инструкция](README.ru.md) · [Version history](CHANGELOG.md)
+**[Download v1.3.0 ZIP](https://github.com/Gitasman/ChatGPT-Limit-Live/raw/refs/heads/main/downloads/ChatGPT-Limit-Live-v1.3.0.zip)** · [Русская инструкция](README.ru.md) · [Version history](CHANGELOG.md)
 
 ## What it does
 
-- A circular floating meter with a large percentage and an arc showing **remaining** capacity. Weekly allowance is preferred when present.
+- A **90 px** floating circle with only a large percentage. The arc follows its outer edge; there is no default track, inset overlay or shadow. Weekly allowance is preferred when present.
 - Drag anywhere on the circle or compact line. Controls remain clickable. The widget stays within the visible viewport and remembers its position.
-- Set the circle diameter **96–240 px** directly in the toolbar popup. Themes and appearance reset are available under Settings.
+- Set an exact **48–320 px** diameter using the slider or number field directly in the toolbar popup.
+- Hover or focus the circle for a styled tooltip with windows, reset times and freshness. It stays open while hovered and can be dismissed with Escape.
+- Set independent colors for the percentage, arc, circle, pill, tooltip and alerts using pickers or HEX. Settings also expose arc width, number size/weight/decimals, background opacity, caps, track, shadow, tooltip delay and polling interval.
 - Choose **Circle / Pill / Icon only**. Hiding the page widget keeps monitoring active. Pin the extension to see the percentage on Chrome's toolbar.
-- Automatic refresh on page load, foreground/focus, detected activity and generation completion, plus 30/60/120-second foreground polling. Hidden tabs poll every 120 seconds, subject to Chrome suspension/throttling.
+- Automatic refresh on page load, foreground/focus, detected activity and generation completion, plus 30/60/120-second foreground polling. Hidden tabs poll no faster than every 120 seconds or the longer configured interval, subject to Chrome suspension/throttling.
 - Detects account/workspace changes, clears old percentages and rejects late responses from the previous context.
 - Labels actual server windows by duration. A weekly-only account does not get a fabricated five-hour meter.
 - Russian UI for Russian Chrome locales; English otherwise. System/light/dark themes, keyboard movement and reduced-motion support.
@@ -27,9 +29,9 @@ To update an existing installation, replace files inside the **same extension di
 
 ## Use
 
-Drag the circle from any free area. The small close control appears on hover/focus and hides the widget. Reopen it via the toolbar popup → **Circle**. The circle prefers the weekly window; the popup lists all returned main windows and additional pools.
+Drag the circle from any free area. The small close control appears on hover/focus and hides the widget. Reopen it via the toolbar popup → **Circle**. The circle prefers the weekly window; window/reset details live in the hover tooltip, while the popup also lists additional pools.
 
-The size slider is immediately visible in the popup. Appearance changes are local to this browser. Arrow keys move the focused widget, Shift increases the step, and Home docks it to the default corner. In pill mode, click or press Enter to return to the circle. Docking and appearance reset preserve monitoring settings and usage data.
+The size slider and exact pixel field are immediately visible in the popup. Settings are grouped into Circle and numbers, Colors, and Behavior. Dark colors are the default; light/system themes and dark/light presets are available. Custom colors are independent overrides; color alerts are off unless enabled. Appearance changes are local to this browser. The old standard 148 px size migrates to 90 px; other saved diameters are preserved. Arrow keys move the focused widget, Shift increases the step, and Home docks it to the default corner. In pill mode, click or press Enter to return to the circle. Docking preserves monitoring settings and usage data. Appearance reset restores the new dark defaults while preserving mode, placement, polling and usage data. Reset colors changes only color overrides.
 
 The toolbar badge rounds down to a whole percent; exact decimals appear in the popup/tooltip. Less than 1% is `<1%`, account checking is `…`, stale data is `?`, unavailable is `—`. Other sites show the last selected ChatGPT tab's indicator; ChatGPT tabs keep their own state. A hidden tab for another account cannot replace the selected source.
 
@@ -55,7 +57,7 @@ npm run check
 python3 package.py
 ```
 
-**73 automated cases passed** for server parsing, account races, polling/errors, ring math, size migration, mode changes, drag boundaries/frame coalescing, preference persistence, toolbar lifecycle, popup controls and privacy boundaries. Chrome APIs, DOM and server responses are mocked in integration tests. The new circular UI has **not** been visually or interactively verified in a real Chrome runtime here; compare it with ChatGPT Settings → Usage after installation.
+**92 automated cases passed** for server parsing, account races, polling/errors, ring math, size migration, color validation/contrast, hover timing/dismissal, manual geometry, mode changes, drag boundaries/frame coalescing, preference persistence, toolbar lifecycle, popup controls and privacy boundaries. Chrome APIs, DOM and server responses are mocked in integration tests. The redesigned circle, tooltip and settings have **not** been visually or interactively verified in a real Chrome runtime here; compare it with ChatGPT Settings → Usage after installation.
 
 `package.py` creates a deterministic versioned ZIP and SHA-256 file in `downloads/`. It excludes existing downloads, repository metadata, caches and environment files. [Research notes](RESEARCH.md) describe the inspected alternatives and integration basis.
 

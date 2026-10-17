@@ -19,7 +19,8 @@ function render(){
   q('status').textContent=state?.usage?(info.stale?t.stale:t.auto):(state?t[state.status]||t.loading:t.empty);q('status').dataset.stale=info.stale?'yes':'no';
   q('checked').textContent=state?.updatedAt?new Date(state.updatedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—';
   q('checked').title=state?.updatedAt?`${t.source} · ${new Date(state.updatedAt).toLocaleString()}`:'';
-  UI.setControls(document,cfg);q('diameter').value=String(cfg.diameter);q('diameterValue').textContent=cfg.diameter+' px';
+  UI.setControls(document,cfg);q('diameter').value=String(cfg.diameter);if(document.activeElement!==q('diameterNumber'))q('diameterNumber').value=String(cfg.diameter);q('diameterValue').textContent=cfg.diameter+' px';
+  const colors=UI.effectiveColors(cfg);q('contrastHint').textContent=((cfg.backgroundOpacity===100&&C.contrast(colors.percent,colors.background)<4.5)||C.contrast(colors.pillText,colors.pill)<4.5||C.contrast(colors.tooltipText,colors.tooltip)<4.5)?t.lowContrast:'';
 }
 function persist(patch){
   cfg=C.settings({...cfg,...patch});const desired=cfg,current=++revision;render();
@@ -32,10 +33,25 @@ function persist(patch){
   writes=writes.then(write,write);return writes;
 }
 for(const mode of ['Panel','Compact','Icon'])q('mode'+mode).onclick=()=>persist({hidden:mode==='Icon',collapsed:mode==='Compact'});
-for(const key of ['theme','position','interval'])q(key).onchange=e=>persist({[key]:['scale','interval'].includes(key)?Number(e.target.value):e.target.value,...(key==='position'?{point:null}:{})});
-q('restore').onclick=()=>persist({theme:'system',scale:1,diameter:148,position:'right',point:null});q('dock').onclick=()=>persist({point:null});
-q('diameter').oninput=e=>{cfg=C.settings({...cfg,diameter:Number(e.target.value)});q('diameterValue').textContent=cfg.diameter+' px';clearTimeout(sizeTimer);sizeTimer=setTimeout(()=>{sizeTimer=null;persist({diameter:cfg.diameter})},120);};
-q('diameter').onchange=e=>{clearTimeout(sizeTimer);sizeTimer=null;return persist({diameter:Number(e.target.value)})};
+for(const key of ['theme','position'])q(key).onchange=e=>persist({[key]:e.target.value,...(key==='position'?{point:null}:{})});
+function numericChange(key,event){
+  const spec=key==='diameter'?{min:48,max:320}:UI.numericControls[key],raw=String(event.target.value),value=Number(raw);
+  if(!raw.trim()||!Number.isFinite(value)||value<spec.min||value>spec.max){event.target.setAttribute?.('aria-invalid','true');q('error').textContent=`${t.invalidValue}: ${spec.min}–${spec.max}`;return Promise.resolve(false);}
+  event.target.setAttribute?.('aria-invalid','false');const result=persist({[key]:key==='numberScale'?value/100:value});event.target.value=String(key==='numberScale'?Math.round(cfg.numberScale*100):cfg[key]);return result;
+}
+for(const key of Object.keys(UI.numericControls))q(key).onchange=e=>numericChange(key,e);
+for(const key of ['decimals','fontWeight'])q(key).onchange=e=>persist({[key]:Number(e.target.value)});
+for(const key of UI.toggles)q(key).onchange=e=>persist({[key]:e.target.checked});
+for(const key of C.COLOR_KEYS){
+  const commit=event=>{const value=C.color(event.target.value);if(!value){event.target.setAttribute?.('aria-invalid','true');q('error').textContent=t.invalidColor;return Promise.resolve(false);}event.target.setAttribute?.('aria-invalid','false');event.target.value=value;return persist({colorOverrides:{...cfg.colorOverrides,[key]:value}});};
+  q('color_'+key).onchange=commit;q('hex_'+key).onchange=commit;
+}
+q('resetColors').onclick=()=>persist({colorOverrides:{}});
+q('presetDark').onclick=()=>persist({theme:'dark',colorOverrides:{}});q('presetLight').onclick=()=>persist({theme:'light',colorOverrides:{}});
+q('restore').onclick=()=>persist(C.resetAppearance(cfg));q('dock').onclick=()=>persist({point:null});
+q('diameter').oninput=e=>{cfg=C.settings({...cfg,diameter:Number(e.target.value)});q('diameterNumber').value=String(cfg.diameter);q('diameterValue').textContent=cfg.diameter+' px';clearTimeout(sizeTimer);sizeTimer=setTimeout(()=>{sizeTimer=null;persist({diameter:cfg.diameter})},120);};
+q('diameter').onchange=e=>{clearTimeout(sizeTimer);sizeTimer=null;return numericChange('diameter',e)};
+q('diameterNumber').onchange=e=>{clearTimeout(sizeTimer);sizeTimer=null;return numericChange('diameter',e)};
 globalThis.addEventListener?.('pagehide',()=>{if(sizeTimer!==null){clearTimeout(sizeTimer);sizeTimer=null;persist({diameter:cfg.diameter})}});
 q('settings').onclick=()=>{q('prefs').hidden=!q('prefs').hidden;q('settings').setAttribute('aria-expanded',String(!q('prefs').hidden));};
 async function refresh(){
