@@ -4,6 +4,10 @@ A small Chrome extension that shows your remaining **Work / Codex** allowance on
 
 **[Download v1.6.0 ZIP](https://github.com/Gitasman/ChatGPT-Limit-Live/raw/refs/heads/main/downloads/ChatGPT-Limit-Live-v1.6.0.zip)** · [Русская инструкция](README.ru.md) · [Version history](CHANGELOG.md)
 
+**Start here:** [Installation](#install) · [How to use](#use) · [Accuracy and privacy](#accuracy-and-privacy) · [Русский](README.ru.md)
+
+> **What it measures:** Server-reported shared **Work / Codex** allowance — not all ChatGPT feature limits. This unofficial extension uses an internal endpoint that may change. The ZIP is for manual Chrome installation (not a Chrome Web Store listing).
+
 ## What it does
 
 - A **50 px** floating circle with only a large percentage. The arc follows its outer edge; the default arc is bright and 5 px wide, with a visible track, Bold percentage and soft shadow. Weekly allowance is preferred when present.
