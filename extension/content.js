@@ -53,7 +53,9 @@ async function usage(auth,signal){
     const normalized=C.normalize(raw);const at=Date.now();let resetsCheckedAt=0;
     if(normalized.resets?.available>0){
       let previous=null;try{previous=C.normalize(cached?.raw).resets}catch{}
-      if(cached?.resetsCheckedAt<=at&&at-cached.resetsCheckedAt<300000&&previous?.available===normalized.resets.available){
+      // Recheck once when a cached credit reaches its expiry, even if the count lags.
+      const crossedExpiry=previous?.details.some(c=>c.expiresAt>cached.resetsCheckedAt&&c.expiresAt<=at);
+      if(cached?.resetsCheckedAt<=at&&at-cached.resetsCheckedAt<300000&&!crossedExpiry&&previous?.available===normalized.resets.available){
         resetsCheckedAt=cached.resetsCheckedAt;
         if(previous.detailsKnown)normalized.resets=previous;
       }else{

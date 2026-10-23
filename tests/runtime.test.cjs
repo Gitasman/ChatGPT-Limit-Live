@@ -1,6 +1,6 @@
 // Chrome and the DOM are mocked at the integration boundary; production scripts run unchanged.
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');const {webcrypto}=require('node:crypto');
-function runtime({failure=0,storageFails=false,resetCount,detailsFailure=0}={}){
+function runtime({failure=0,storageFails=false,resetCount,detailsFailure=0,resetExpiry}={}){
  let now=1800000000000,account='a1',user='u1',used=20,stops=false,next=0;const timers=new Map(),els=new Map(),listeners={},storage={},requests=[];let observer,changed;
  const element=id=>{if(!els.has(id))els.set(id,{textContent:'',innerHTML:'',dataset:{},value:'',hidden:false,attrs:{},setAttribute(k,v){this.attrs[k]=v},addEventListener(k,v){this[k]=v},getBoundingClientRect(){return {left:488,top:348,width:300,height:240}},style:{setProperty(k,v){this[k]=v},getPropertyValue(k){return this[k]||''}}});return els.get(id)};
  const root={getElementById:element,innerHTML:''};const host={...element('host'),isConnected:false,attachShadow:()=>root};
@@ -10,7 +10,7 @@ function runtime({failure=0,storageFails=false,resetCount,detailsFailure=0}={}){
  MutationObserver:class{constructor(f){observer=f}observe(){}disconnect(){}},
  setTimeout:(fn,ms)=>{timers.set(++next,{fn,at:now+ms});return next},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{timers.set(++next,{fn,at:now+ms,interval:ms});return next},clearInterval:id=>timers.delete(id),
  chrome:{i18n:{getUILanguage:()=> 'ru'},runtime:{id:'test',sendMessage:async message=>{requests.push({message});return {ok:true}},onMessage:{addListener:f=>listeners.chromeMessage=f}},storage:{local:{get:async key=>({[key]:storage[key]}),set:async obj=>{if(storageFails)throw Error('denied');const changes={};for(const [key,value]of Object.entries(obj)){changes[key]={oldValue:storage[key],newValue:structuredClone(value)};}Object.assign(storage,structuredClone(obj));changed?.(changes,'local');}},onChanged:{addListener:f=>changed=f}}},
- fetch:async(url,init)=>{requests.push({url,headers:init.headers,method:init.method});const details=url.endsWith('/rate-limit-reset-credits');const session=url.endsWith('/api/auth/session');return {ok:session||!(details?detailsFailure:failure),status:session?200:details?detailsFailure:failure,headers:new Headers({'content-type':'application/json','retry-after':'120'}),json:async()=>details?{available_count:resetCount,credits:[{id:'private-credit-id',status:'available',title:'Full reset',expires_at:new Date(now+86400000).toISOString()}]}:session?{user:{id:user},account:{id:account},accessToken:'private-test-token'}:{plan_type:'business',rate_limit_reset_credits:resetCount===undefined?undefined:{available_count:resetCount},rate_limit:{primary_window:{used_percent:used,limit_window_seconds:604800,reset_at:now/1000+86400},secondary_window:null}}};}
+ fetch:async(url,init)=>{requests.push({url,headers:init.headers,method:init.method});const details=url.endsWith('/rate-limit-reset-credits');const session=url.endsWith('/api/auth/session');return {ok:session||!(details?detailsFailure:failure),status:session?200:details?detailsFailure:failure,headers:new Headers({'content-type':'application/json','retry-after':'120'}),json:async()=>details?{available_count:resetCount,credits:[{id:'private-credit-id',status:'available',title:'Full reset',expires_at:new Date(resetExpiry??now+86400000).toISOString()}]}:session?{user:{id:user},account:{id:account},accessToken:'private-test-token'}:{plan_type:'business',rate_limit_reset_credits:resetCount===undefined?undefined:{available_count:resetCount},rate_limit:{primary_window:{used_percent:used,limit_window_seconds:604800,reset_at:now/1000+86400},secondary_window:null}}};}
  });context.window=context;context.addEventListener=(k,f)=>listeners[k]=f;context.postMessage=()=>{};
  for(const path of ['core.js','ui.js','layout.js','pill.js','tooltip.js','content.js'])vm.runInContext(fs.readFileSync(__dirname+'/../extension/'+path,'utf8'),context,{filename:path});
  const settle=async()=>{for(let i=0;i<12;i++)await new Promise(r=>setImmediate(r))};
@@ -50,3 +50,15 @@ test('unchanged UI ticks reuse the sanitized snapshot without duplicate normaliz
 
 test('pill progress follows the circle and uses shared track/progress colors',async()=>{const r=runtime();await r.settle();r.els.get('pillShell').getBoundingClientRect=()=>({left:100,top:100,width:160,height:38});await r.settings({collapsed:true,colorOverrides:{track:'#123456',ring:'#abcdef'}});assert.equal(r.els.get('pillRingSvg').attrs.viewBox,'0 0 160 38');assert.equal(r.els.get('pillRingProgress').attrs['stroke-dashoffset'],r.els.get('ringProgress').attrs['stroke-dashoffset']);assert.equal(r.els.get('pillRingTrack').attrs.visibility,'visible');assert.equal(r.context.document.createElement().style['--orb-track'],'#123456');r.set('a1','u1',65);await r.advance(30000);assert.equal(r.els.get('pillRingProgress').attrs['stroke-dashoffset'],'65');await r.settings({track:false});assert.equal(r.els.get('pillRingTrack').attrs.visibility,'hidden')});
 test('foreground changes publish even when the cached usage snapshot is unchanged',async()=>{const r=runtime();await r.settle();const before=r.requests.filter(r=>r.message?.type==='limit-live-snapshot').length;r.context.document.hasFocus=()=>false;await r.advance(15000);const messages=r.requests.filter(r=>r.message?.type==='limit-live-snapshot');assert.equal(messages.length,before+1);assert.equal(messages.at(-1).message.foreground,false)});
+
+test('a credit expiry bypasses the five-minute detail cache once without repeated expiry requests',async()=>{
+ const r=runtime({resetCount:1,resetExpiry:1800000060000});await r.settle();
+ const count=()=>r.requests.filter(r=>r.url?.endsWith('/rate-limit-reset-credits')).length;
+ assert.equal(count(),1);await r.advance(30000);assert.equal(count(),1);
+ await r.advance(30000);assert.equal(count(),2);await r.advance(30000);assert.equal(count(),2);
+ r.els.get('orb').pointerenter();await r.advance(250);assert.match(r.els.get('orbTooltip').innerHTML,/data-tone="expired"/);
+});
+test('actual hover exposes available credit expiry without opening the extension popup',async()=>{
+ const r=runtime({resetCount:1});await r.settle();r.els.get('orb').pointerenter();await r.advance(250);
+ const html=r.els.get('orbTooltip').innerHTML;assert.match(html,/Full reset/);assert.match(html,/Expires in/);assert.match(html,/<time datetime=/);assert.match(html,/Last account reset/);assert.doesNotMatch(html,/private-credit-id/);
+});

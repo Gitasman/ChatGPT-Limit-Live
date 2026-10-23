@@ -2,7 +2,7 @@
 
 A small Chrome extension that shows your remaining **Work / Codex** allowance on ChatGPT — automatically, with account-aware server data.
 
-**[Download v1.6.0 ZIP](https://github.com/Gitasman/ChatGPT-Limit-Live/raw/refs/heads/main/downloads/ChatGPT-Limit-Live-v1.6.0.zip)** · [Русская инструкция](README.ru.md) · [Version history](CHANGELOG.md)
+**[Download v1.7.0 ZIP](https://github.com/NasaatR/ChatGPT-Limit-Live/raw/refs/heads/main/downloads/ChatGPT-Limit-Live-v1.7.0.zip)** · [Русская инструкция](README.ru.md) · [Version history](CHANGELOG.md)
 
 **Start here:** [Installation](#install) · [How to use](#use) · [Accuracy and privacy](#accuracy-and-privacy) · [Русский](README.ru.md)
 
@@ -14,7 +14,7 @@ A small Chrome extension that shows your remaining **Work / Codex** allowance on
 - The **Pill** also has a progress outline following its capsule shape. Circle and Pill share progress/track colors and track visibility; the outline follows text resizing and stale/empty/full states.
 - Drag anywhere on the circle or compact line. Visibility is controlled only from the toolbar popup; there are no page hide buttons. The widget stays within the visible viewport and remembers its position.
 - Set an exact **32–150 px** diameter using the slider or number field directly in the toolbar popup.
-- Hover or focus the circle for a larger, readable tooltip with windows, remaining allowance, reset countdowns/dates and freshness. Text size (12–20 px) and width (240–420 px) are configurable. It stays open while hovered and can be dismissed with Escape.
+- Hover or focus the circle for compact, readable details: remaining allowance, next scheduled refresh, available banked resets and their exact expiration dates. Identical reset offers share a row; earliest deadlines come first and expirations within 48 hours are highlighted. Text size (12–20 px) and width (240–420 px) are configurable. It stays open while hovered and can be dismissed with Escape.
 - Set independent colors for the percentage, arc, circle, pill, tooltip and alerts using an inline editor with swatches, RGB sliders, HEX and an optional eyedropper. Complete HEX values save without blur; Done or Escape closes the editor and flushes pending edits. Each color can return to its default independently. **Track color** is directly below **Show track** in Circle and numbers, with its own swatch/HEX and autosave feedback. Settings also expose arc width, number size/weight/decimals, background opacity, caps, track, shadow, tooltip delay and polling interval.
 - Choose **Circle / Pill / Icon only**. Hiding the page widget keeps monitoring active. Pin the extension to see the percentage on Chrome's toolbar.
 - Automatic refresh on page load, foreground/focus, detected activity and generation completion, plus configurable 30–300 second foreground polling. Hidden tabs poll no faster than every 120 seconds or the longer configured interval, subject to Chrome suspension/throttling.
@@ -42,15 +42,19 @@ The toolbar badge rounds down to a whole percent; exact decimals appear in the p
 
 ## Export and import preferences
 
-Open **Settings → Settings backup**. **Export** downloads `ChatGPT-Limit-Live-settings-v1.6.0.json`, including all appearance, tooltip, language, polling, display-mode and normalized-position preferences. Pending valid color/size changes are flushed first. No usage, tokens, account IDs or conversations enter the backup.
+Open **Settings → Settings backup**. **Export** downloads `ChatGPT-Limit-Live-settings-v1.7.0.json`, including all appearance, tooltip, language, polling, display-mode and normalized-position preferences. Pending valid color/size changes are flushed first. No usage, tokens, account IDs or conversations enter the backup.
 
 **Import** opens a local JSON chooser. Format/schema, field names, types, bounds, colors and size (64 KiB maximum) are checked before any preferences change. v1.5 JSON backups are accepted and preserve their explicit font-weight/color choices instead of applying new defaults. The whole valid configuration is then applied and saved; a storage failure restores the previous configuration. **Undo import** is available until the next manual preference change, so it cannot discard later edits. Appearance reset preserves language and monitoring; it is separate from importing an entire backup.
 
 ## Available banked resets
 
-The popup and hover details show the server-provided `rate_limit_reset_credits.available_count`, independently from the next automatic reset time. Missing or malformed data is shown as unavailable, never as zero. When the count is positive, the read-only `/backend-api/wham/rate-limit-reset-credits` endpoint supplies available-reset titles and expiration dates. Details are account-scoped and cached for five minutes, with a three-second timeout; an unavailable details endpoint does not hide the percentage or count. No extra request is made for a missing or zero count.
+The popup and hover details show the server-provided `rate_limit_reset_credits.available_count`, independently from the next automatic reset time. Missing or malformed data is shown as unavailable, never as zero. When the count is positive, the read-only `/backend-api/wham/rate-limit-reset-credits` endpoint supplies available-reset titles and expiration dates. Details are account-scoped and cached for five minutes, with one early recheck when a known credit expires and a three-second timeout; an unavailable details endpoint does not hide the percentage or count. No extra request is made for a missing or zero count.
 
-**Limits & resets** and each reset card open ChatGPT’s official usage page, where the user selects the intended account/workspace, reviews expiration and confirms application. The extension does not consume resets or perform purchases. Banked promotional resets and paid instant resets have different eligibility and effects; see the official sources in [Research notes](RESEARCH.md). Reset titles and expiration dates are always visible in Overview, including year and local time-zone abbreviation. No disclosure needs to be opened. Missing dates remain explicitly unavailable. Actual reset availability and activation in the user’s live account are not verified here.
+**Open Usage** and each reset card point to `https://chatgpt.com/settings/usage`, the destination in current official Codex source. The old `/codex/settings/usage` route redirected to the homepage for the user. If a direct link is unavailable for an account, open **ChatGPT → Settings → Usage** and select the correct account/workspace. The popup includes this fallback. Navigation in the user's signed-in account has not been exercised here.
+
+Reset titles and full expiration dates, including year and local time-zone abbreviation, are visible in both Overview and hover details. Identical title/expiration pairs share a counted row. Expired records are marked explicitly; the server count is not silently recalculated locally. Incomplete details remain marked unavailable. The extension does not consume resets or perform purchases.
+
+**Last account reset** is shown as **Not provided**: the inspected usage/reset-credit schemas do not supply a reset-use timestamp. A grant date, changing allowance or next scheduled refresh cannot establish it. OpenAI documents 30-day banked-reset history in the desktop app under **Settings → Usage & billing → History**. That history excludes paid/global resets and is not exposed by the read-only endpoints used here. See [Research notes](RESEARCH.md) for the checked sources.
 
 ## Accuracy and privacy
 
@@ -64,7 +68,7 @@ Local storage contains preferences and at most eight allowlisted usage snapshots
 
 ## Efficiency and checks
 
-No third-party runtime dependencies or build framework. Cross-tab request locking and a short account-scoped cache reduce duplicate usage calls. UI text/attributes update in place, pointer moves are coalesced by animation frame, dragging saves only on release, stream-related DOM checks are throttled, and unchanged toolbar values are not repainted. Size changes and preference writes are coalesced/serialized; rapid changes preserve earlier edits. Error retries back off and respect Retry-After. Percentage formatters are reused in a bounded locale/precision cache. A sanitized snapshot is reused while its source inputs are unchanged; publication compares state/focus/badge instead of serializing the same payload repeatedly. Freshness still checks the current clock. Pill geometry follows ResizeObserver size/stroke changes and unchanged SVG attributes are skipped; its observer is disconnected on shutdown.
+No third-party runtime dependencies or build framework. Cross-tab request locking and a short account-scoped cache reduce duplicate usage calls. UI text/attributes update in place, pointer moves are coalesced by animation frame, dragging saves only on release, stream-related DOM checks are throttled, and unchanged toolbar values are not repainted. Size changes and preference writes are coalesced/serialized; rapid changes preserve earlier edits. Error retries back off and respect Retry-After. Date and percentage formatters are reused in a bounded locale/precision cache. A sanitized snapshot is reused while its source inputs are unchanged; publication compares state/focus/badge instead of serializing the same payload repeatedly. Freshness still checks the current clock. Pill geometry follows ResizeObserver size/stroke changes and unchanged SVG attributes are skipped; its observer is disconnected on shutdown.
 
 With Node.js 20+:
 
@@ -74,8 +78,10 @@ npm run check
 python3 package.py
 ```
 
-**143 automated cases passed** for server parsing, account races, polling/errors, ring math, size migration, color validation/contrast, hover timing/dismissal, manual geometry, inline color autosave/flush/error recovery, reset-credit parsing/cache/account isolation, mode changes, drag boundaries/frame coalescing, preference persistence, toolbar lifecycle, popup controls, Pill path/resize/progress/idle work, always-visible reset dates, direct links, live language changes, settings backup validation/round trips/import rollback/undo and privacy boundaries. Chrome APIs, DOM and server responses are mocked in integration tests. The redesigned circle, Pill outline, tooltip and settings have **not** been visually or interactively verified in a real Chrome runtime here; compare it with ChatGPT Settings → Usage after installation.
+**151 automated cases passed** for server parsing, account races, polling/errors, ring math, size migration, color validation/contrast, hover timing/dismissal, manual geometry, inline color autosave/flush/error recovery, reset-credit parsing/cache/account isolation, mode changes, drag boundaries/frame coalescing, preference persistence, toolbar lifecycle, popup controls, Pill path/resize/progress/idle work, banked-expiration hover details, duplicate grouping, expiry cache invalidation, explicit unknown reset history, current-route wiring, live language changes, settings backup validation/round trips/import rollback/undo and privacy boundaries. Chrome APIs, DOM and server responses are mocked in integration tests. The redesigned circle, Pill outline, tooltip and settings have **not** been visually or interactively verified in a real Chrome runtime here; compare it with ChatGPT Settings → Usage after installation.
 
 `package.py` creates a deterministic versioned ZIP and SHA-256 file in `downloads/`. It excludes existing downloads, repository metadata, caches and environment files. [Research notes](RESEARCH.md) describe the inspected alternatives and integration basis.
+
+Maintained by [NasaatR](https://github.com/NasaatR). Original repository: [ChatGPT-Limit-Live](https://github.com/NasaatR/ChatGPT-Limit-Live).
 
 Unofficial. Not affiliated with or endorsed by OpenAI. MIT license.

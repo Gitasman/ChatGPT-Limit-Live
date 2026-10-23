@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0 — 2026-10-23
+
+- Replace the retired `/codex/settings/usage` destination with the current official `https://chatgpt.com/settings/usage`; label the action Open Usage and include a manual Settings → Usage fallback plus account/workspace guidance. Signed-in navigation remains unverified here.
+- Compact hover details while preserving readable text, scheduled refresh countdown/date and freshness. Show banked-reset titles and full expiration dates directly on hover. Group identical offers, order by expiry, highlight deadlines within 48 hours and mark expired/missing/incomplete metadata.
+- Show last account reset as unavailable: inspected schemas expose grant/expiration fields, not reset-use timestamps. Point to the desktop app’s banked-reset History; do not infer history from allowance changes.
+- Recheck optional credit details once at a known expiry before the five-minute cache ends, without repeated expiry-triggered calls. Reuse bounded locale-specific date formatters.
+- Align canonical repository links with the NasaatR account rename and add the small Made by Nasaat credit in Settings. Preserve existing settings and permissions.
+- Validation: 151 automated cases plus syntax checks. DOM/Chrome/server boundaries are mocked; real Chrome visuals and live-account reset/navigation behavior remain unverified.
+
 ## 1.6.0 — 2026-10-17
 
 - Show available-reset titles and expiration dates without a disclosure; include year/time zone and direct Usage links on reset cards and a compact Limits & resets button.
